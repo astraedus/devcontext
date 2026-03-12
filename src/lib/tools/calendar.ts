@@ -19,16 +19,11 @@ export const calendarTools = {
       parameters: zodSchema(listEventsSchema),
       execute: async ({ days }) => {
         try {
-          let credentials;
+          let token: string;
           try {
-            credentials = getAccessTokenFromTokenVault();
+            token = getAccessTokenFromTokenVault();
           } catch (tvError) {
             logAudit("google-calendar", "Token Vault Exchange", "Token Vault error: " + String(tvError), "error");
-            return { status: "error", message: "Token Vault exchange failed: " + String(tvError) };
-          }
-          const token = credentials?.accessToken;
-          if (!token) {
-            logAudit("google-calendar", "Token Vault Exchange", "No token returned (not connected)", "denied");
             return { status: "not_connected", message: "Google Calendar is not connected. Visit /dashboard/permissions to connect it." };
           }
 
@@ -74,16 +69,11 @@ export const calendarTools = {
       parameters: zodSchema(z.object({})),
       execute: async () => {
         try {
-          let credentials;
+          let token: string;
           try {
-            credentials = getAccessTokenFromTokenVault();
+            token = getAccessTokenFromTokenVault();
           } catch (tvError) {
             logAudit("google-calendar", "Token Vault Exchange (Today)", "Token Vault error: " + String(tvError), "error");
-            return { status: "error", message: "Token Vault exchange failed: " + String(tvError) };
-          }
-          const token = credentials?.accessToken;
-          if (!token) {
-            logAudit("google-calendar", "Token Vault Exchange (Today)", "No token returned (not connected)", "denied");
             return { status: "not_connected", message: "Google Calendar is not connected. Visit /dashboard/permissions to connect it." };
           }
 

@@ -39,9 +39,10 @@ export const slackTools = {
       parameters: zodSchema(unreadMessagesSchema),
       execute: async ({ limit }) => {
         try {
-          const credentials = getAccessTokenFromTokenVault();
-          const token = credentials?.accessToken;
-          if (!token) {
+          let token: string;
+          try {
+            token = getAccessTokenFromTokenVault();
+          } catch {
             return {
               status: "not_connected",
               message:
@@ -90,9 +91,10 @@ export const slackTools = {
       parameters: zodSchema(channelSummarySchema),
       execute: async ({ channelName, messageCount }) => {
         try {
-          const credentials = getAccessTokenFromTokenVault();
-          const token = credentials?.accessToken;
-          if (!token) {
+          let token: string;
+          try {
+            token = getAccessTokenFromTokenVault();
+          } catch {
             return {
               status: "not_connected",
               message:

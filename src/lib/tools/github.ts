@@ -30,16 +30,11 @@ export const githubTools = {
       parameters: zodSchema(listPRsSchema),
       execute: async ({ filter }) => {
         try {
-          let credentials;
+          let token: string;
           try {
-            credentials = getAccessTokenFromTokenVault();
+            token = getAccessTokenFromTokenVault();
           } catch (tvError) {
             logAudit("github", "Token Vault Exchange", "Token Vault error: " + String(tvError), "error");
-            return { status: "error", message: "Token Vault exchange failed: " + String(tvError) };
-          }
-          const token = credentials?.accessToken;
-          if (!token) {
-            logAudit("github", "Token Vault Exchange", "No token returned (not connected)", "denied");
             return {
               status: "not_connected",
               message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",
@@ -90,9 +85,10 @@ export const githubTools = {
       parameters: zodSchema(getCommitsSchema),
       execute: async ({ repo }) => {
         try {
-          const credentials = getAccessTokenFromTokenVault();
-          const token = credentials?.accessToken;
-          if (!token) {
+          let token: string;
+          try {
+            token = getAccessTokenFromTokenVault();
+          } catch {
             return {
               status: "not_connected",
               message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",
@@ -175,9 +171,10 @@ export const githubTools = {
       parameters: zodSchema(z.object({})),
       execute: async () => {
         try {
-          const credentials = getAccessTokenFromTokenVault();
-          const token = credentials?.accessToken;
-          if (!token) {
+          let token: string;
+          try {
+            token = getAccessTokenFromTokenVault();
+          } catch {
             return {
               status: "not_connected",
               message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",
