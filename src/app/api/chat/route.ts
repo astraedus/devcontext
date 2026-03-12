@@ -1,5 +1,4 @@
 import { streamText, stepCountIs } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { auth0 } from "@/lib/auth0";
 import { NextRequest, NextResponse } from "next/server";
 import { githubTools } from "@/lib/tools/github";
@@ -16,6 +15,18 @@ Your role is to provide concise, actionable developer briefings. When asked abou
 Always lead with the most important items. Be brief and developer-friendly. Format lists with bullet points.
 If a service is not connected, mention it and suggest the user visit the Permissions page to connect it.`;
 
+function getModel() {
+  // Use Anthropic if available, fall back to Google Gemini
+  if (process.env.ANTHROPIC_API_KEY) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { anthropic } = require("@ai-sdk/anthropic");
+    return anthropic("claude-sonnet-4-5");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { google } = require("@ai-sdk/google");
+  return google("gemini-2.5-flash");
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth0.getSession();
   if (!session?.user) {
@@ -25,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { messages } = await req.json();
 
   const result = streamText({
-    model: anthropic("claude-opus-4-5"),
+    model: getModel(),
     system: SYSTEM_PROMPT,
     messages,
     tools: {
