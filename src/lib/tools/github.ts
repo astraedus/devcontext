@@ -31,8 +31,8 @@ export const githubTools = {
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
-        } catch (tvError) {
-          logAudit("github", "Token Vault Exchange", "Token Vault error: " + String(tvError), "error");
+        } catch {
+          logAudit("github", "Token Vault Exchange", "No GitHub token available -- service not connected", "error");
           return {
             status: "not_connected",
             message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",
@@ -85,7 +85,7 @@ export const githubTools = {
         try {
           token = getAccessTokenFromTokenVault();
         } catch {
-          logAudit("github", "Token Vault Exchange (Commits)", "Token not available", "error");
+          logAudit("github", "Token Vault Exchange", "No GitHub token available -- service not connected", "error");
           return {
             status: "not_connected",
             message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",
@@ -170,7 +170,7 @@ export const githubTools = {
         try {
           token = getAccessTokenFromTokenVault();
         } catch {
-          logAudit("github", "Token Vault Exchange (Notifications)", "Token not available", "error");
+          logAudit("github", "Token Vault Exchange", "No GitHub token available -- service not connected", "error");
           return {
             status: "not_connected",
             message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",

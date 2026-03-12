@@ -41,7 +41,7 @@ export const slackTools = {
         try {
           token = getAccessTokenFromTokenVault();
         } catch {
-          logAudit("slack", "Token Vault Exchange", "Token not available", "error");
+          logAudit("slack", "Token Vault Exchange", "No Slack token available -- service not connected", "error");
           return {
             status: "not_connected",
             message:
@@ -92,7 +92,7 @@ export const slackTools = {
         try {
           token = getAccessTokenFromTokenVault();
         } catch {
-          logAudit("slack", "Token Vault Exchange (Channel)", "Token not available", "error");
+          logAudit("slack", "Token Vault Exchange", "No Slack token available -- service not connected", "error");
           return {
             status: "not_connected",
             message:
