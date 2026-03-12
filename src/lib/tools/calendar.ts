@@ -1,43 +1,110 @@
 /**
- * Google Calendar tool definitions for the AI agent.
- *
- * These tools are called by Claude during chat. In production, they use Auth0
- * Token Vault to retrieve Google OAuth tokens for Calendar API access.
+ * Google Calendar tools — uses Auth0 Token Vault for authentication.
  */
 
 import { tool, zodSchema } from "ai";
 import { z } from "zod";
+import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
+import { withGoogleConnection } from "../auth0-ai";
 
-const listUpcomingEventsSchema = z.object({
-  days: z.number().describe("Number of days to look ahead (1-14, default 3)"),
-  maxResults: z.number().describe("Maximum number of events to return (1-20, default 10)"),
+const listEventsSchema = z.object({
+  days: z.number().min(1).max(14).describe("Number of days to look ahead (default 3)"),
 });
 
 export const calendarTools = {
-  listUpcomingEvents: tool<z.infer<typeof listUpcomingEventsSchema>, { status: string; message: string; days: number; maxResults: number }>({
-    description:
-      "List upcoming calendar events for the authenticated user in the next N days.",
-    inputSchema: zodSchema(listUpcomingEventsSchema),
-    execute: async ({ days, maxResults }) => {
-      return {
-        status: "not_connected",
-        message: `Google Calendar is not connected yet. Visit /dashboard/permissions to connect it and allow the agent to list your next ${days} days of events (up to ${maxResults} results).`,
-        days,
-        maxResults,
-      };
-    },
-  }),
+  listUpcomingEvents: withGoogleConnection(
+    tool({
+      description: "List upcoming calendar events for the authenticated user in the next N days.",
+      parameters: zodSchema(listEventsSchema),
+      execute: async ({ days }) => {
+        try {
+          const credentials = getAccessTokenFromTokenVault();
+          const token = credentials?.accessToken;
+          if (!token) {
+            return { status: "not_connected", message: "Google Calendar is not connected. Visit /dashboard/permissions to connect it." };
+          }
 
-  getTodaySchedule: tool<Record<string, never>, { status: string; message: string }>({
-    description:
-      "Get the complete schedule for today from Google Calendar, organized by time.",
-    inputSchema: zodSchema(z.object({})),
-    execute: async () => {
-      return {
-        status: "not_connected",
-        message:
-          "Google Calendar is not connected yet. Visit /dashboard/permissions to connect it and allow the agent to read your daily schedule.",
-      };
-    },
-  }),
+          const now = new Date();
+          const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+          const params = new URLSearchParams({
+            timeMin: now.toISOString(),
+            timeMax: future.toISOString(),
+            maxResults: "10",
+            singleEvents: "true",
+            orderBy: "startTime",
+          });
+
+          const res = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          if (!res.ok) return { status: "error", message: `Calendar API error: ${res.status}` };
+
+          const data = await res.json();
+          const events = (data.items || []).map((e: any) => ({
+            title: e.summary,
+            start: e.start.dateTime || e.start.date,
+            end: e.end.dateTime || e.end.date,
+            link: e.htmlLink,
+            attendees: e.attendees?.length || 0,
+          }));
+
+          return { status: "ok", days, count: events.length, events };
+        } catch (err) {
+          return { status: "error", message: String(err) };
+        }
+      },
+    })
+  ),
+
+  getTodaySchedule: withGoogleConnection(
+    tool({
+      description: "Get the complete schedule for today from Google Calendar.",
+      parameters: zodSchema(z.object({})),
+      execute: async () => {
+        try {
+          const credentials = getAccessTokenFromTokenVault();
+          const token = credentials?.accessToken;
+          if (!token) {
+            return { status: "not_connected", message: "Google Calendar is not connected. Visit /dashboard/permissions to connect it." };
+          }
+
+          const now = new Date();
+          const startOfDay = new Date(now);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(now);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const params = new URLSearchParams({
+            timeMin: startOfDay.toISOString(),
+            timeMax: endOfDay.toISOString(),
+            maxResults: "20",
+            singleEvents: "true",
+            orderBy: "startTime",
+          });
+
+          const res = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          if (!res.ok) return { status: "error", message: `Calendar API error: ${res.status}` };
+
+          const data = await res.json();
+          const events = (data.items || []).map((e: any) => ({
+            title: e.summary,
+            start: e.start.dateTime || e.start.date,
+            end: e.end.dateTime || e.end.date,
+            location: e.location || null,
+            attendeeCount: e.attendees?.length || 0,
+          }));
+
+          return { status: "ok", date: now.toISOString().split("T")[0], count: events.length, events };
+        } catch (err) {
+          return { status: "error", message: String(err) };
+        }
+      },
+    })
+  ),
 };
