@@ -7,9 +7,14 @@ interface AuditEntry {
   status: "success" | "denied" | "error";
 }
 
-// In-memory audit log (resets on serverless cold start)
-// For production, this would use a database
-const auditLog: AuditEntry[] = [];
+// Use globalThis to share audit log across serverless function invocations
+// within the same warm container. Resets on cold start.
+// For production, this would use a database.
+const globalAudit = globalThis as unknown as { __auditLog?: AuditEntry[] };
+if (!globalAudit.__auditLog) {
+  globalAudit.__auditLog = [];
+}
+const auditLog = globalAudit.__auditLog;
 
 export function logAudit(
   provider: string,

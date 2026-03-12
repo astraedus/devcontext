@@ -1,19 +1,22 @@
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, tool, zodSchema } from "ai";
+import { z } from "zod";
 import { auth0 } from "@/lib/auth0";
 import { NextRequest, NextResponse } from "next/server";
 import { githubTools } from "@/lib/tools/github";
 import { calendarTools } from "@/lib/tools/calendar";
 import { slackTools } from "@/lib/tools/slack";
 
-const SYSTEM_PROMPT = `You are DevContext, an AI developer assistant with access to the user's GitHub, Google Calendar, and Slack.
+const SYSTEM_PROMPT = `You are DevContext, an AI developer assistant with access to the user's GitHub, Google Calendar, and Slack via Auth0 Token Vault.
 
-Your role is to provide concise, actionable developer briefings. When asked about current context, proactively use your tools to fetch:
-- Open pull requests and review assignments from GitHub
-- Upcoming meetings from Google Calendar
-- Unread messages and mentions from Slack
+IMPORTANT: When asked about work context, PRs, meetings, messages, or anything related to the user's developer workflow, you MUST call the relevant tools. Do NOT assume services are disconnected — always try the tool call first. The tools will return a "not_connected" status if the service isn't available, and you should relay that to the user.
+
+Your role is to provide concise, actionable developer briefings. Proactively use your tools to fetch:
+- Open pull requests and review assignments from GitHub (listPullRequests, getRecentCommits, getNotifications)
+- Upcoming meetings from Google Calendar (listUpcomingEvents, getTodaySchedule)
+- Unread messages and mentions from Slack (getUnreadMessages, getChannelSummary)
 
 Always lead with the most important items. Be brief and developer-friendly. Format lists with bullet points.
-If a service is not connected, mention it and suggest the user visit the Permissions page to connect it.`;
+If a tool returns "not_connected", tell the user to visit the Permissions page to connect that service.`;
 
 function getModel() {
   // Use Anthropic if available, fall back to Google Gemini
@@ -35,15 +38,27 @@ export async function POST(req: NextRequest) {
 
   const { messages } = await req.json();
 
+  const allTools = {
+    ...githubTools,
+    ...calendarTools,
+    ...slackTools,
+    getServerTime: tool({
+      description: "Get the current server time. Call this when the user asks about time or as a connectivity test.",
+      parameters: zodSchema(z.object({})),
+      execute: async () => {
+        return { time: new Date().toISOString(), status: "ok" };
+      },
+    }),
+  };
+
+  console.log("[DevContext] Tool names:", Object.keys(allTools));
+  console.log("[DevContext] Tool types:", Object.entries(allTools).map(([k, v]) => `${k}: ${typeof v}`));
+
   const result = streamText({
     model: getModel(),
     system: SYSTEM_PROMPT,
     messages,
-    tools: {
-      ...githubTools,
-      ...calendarTools,
-      ...slackTools,
-    },
+    tools: allTools,
     stopWhen: stepCountIs(5),
   });
 

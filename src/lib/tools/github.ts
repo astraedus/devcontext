@@ -30,9 +30,16 @@ export const githubTools = {
       parameters: zodSchema(listPRsSchema),
       execute: async ({ filter }) => {
         try {
-          const credentials = getAccessTokenFromTokenVault();
+          let credentials;
+          try {
+            credentials = getAccessTokenFromTokenVault();
+          } catch (tvError) {
+            logAudit("github", "Token Vault Exchange", "Token Vault error: " + String(tvError), "error");
+            return { status: "error", message: "Token Vault exchange failed: " + String(tvError) };
+          }
           const token = credentials?.accessToken;
           if (!token) {
+            logAudit("github", "Token Vault Exchange", "No token returned (not connected)", "denied");
             return {
               status: "not_connected",
               message: "GitHub is not connected. Visit /dashboard/permissions to connect it.",

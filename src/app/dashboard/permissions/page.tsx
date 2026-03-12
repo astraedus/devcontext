@@ -31,17 +31,23 @@ const CONNECTION_MAP: Record<string, string> = {
 
 export default async function PermissionsPage() {
   const session = await auth0.getSession();
+  const user = session?.user as Record<string, unknown> | undefined;
+  const sub = (user?.sub as string) ?? "";
+
+  // Check identities array (if available from Auth0 Actions)
   const identities: Array<{ connection?: string; provider?: string }> =
-    ((session?.user as Record<string, unknown> | undefined)?.identities as Array<{
-      connection?: string;
-      provider?: string;
-    }>) ?? [];
+    (user?.identities as Array<{ connection?: string; provider?: string }>) ?? [];
+
+  // Also check the sub claim prefix (e.g. "google-oauth2|..." means Google is connected)
+  const subProvider = sub.split("|")[0]; // e.g. "google-oauth2", "github", "slack"
 
   const providers: Provider[] = PROVIDERS_BASE.map((p) => {
     const connectionName = CONNECTION_MAP[p.id];
-    const isConnected = identities.some(
-      (id) => id.connection === connectionName || id.provider === connectionName
-    );
+    const isConnected =
+      subProvider === connectionName ||
+      identities.some(
+        (id) => id.connection === connectionName || id.provider === connectionName
+      );
     return { ...p, connected: isConnected, lastUsed: null };
   });
   return (
