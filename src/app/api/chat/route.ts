@@ -1,5 +1,6 @@
 import { streamText, stepCountIs, tool, zodSchema } from "ai";
 import { z } from "zod";
+import { setAIContext } from "@auth0/ai-vercel";
 import { auth0 } from "@/lib/auth0";
 import { NextRequest, NextResponse } from "next/server";
 import { githubTools } from "@/lib/tools/github";
@@ -37,6 +38,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages } = await req.json();
+
+  // Set AI context for Token Vault — required for AsyncLocalStorage-based credential passing
+  const userSub = (session.user as Record<string, unknown>).sub as string;
+  setAIContext({ threadID: userSub });
 
   const allTools = {
     ...githubTools,
