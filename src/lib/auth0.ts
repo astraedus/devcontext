@@ -7,7 +7,7 @@
  * Required environment variables (see .env.local.example):
  *   AUTH0_SECRET          - 32-byte random secret for session encryption
  *   AUTH0_BASE_URL        - Your app's base URL (http://localhost:3000 in dev)
- *   AUTH0_ISSUER_BASE_URL - Your Auth0 domain (https://your-tenant.auth0.com)
+ *   AUTH0_DOMAIN          - Your Auth0 tenant domain (your-tenant.auth0.com)
  *   AUTH0_CLIENT_ID       - Auth0 application client ID
  *   AUTH0_CLIENT_SECRET   - Auth0 application client secret
  *
