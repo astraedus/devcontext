@@ -79,26 +79,14 @@ export function ChatPanel() {
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
-          // Parse Vercel AI SDK data stream format
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("0:")) {
-              // Text chunk
-              try {
-                const text = JSON.parse(line.slice(2));
-                assistantContent += text;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? { ...m, content: assistantContent }
-                      : m
-                  )
-                );
-              } catch {
-                // Skip malformed chunks
-              }
-            }
-          }
+          assistantContent += chunk;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: assistantContent }
+                : m
+            )
+          );
         }
       }
     } catch (err) {

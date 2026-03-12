@@ -117,15 +117,20 @@ export function PermissionCard({ provider }: PermissionCardProps) {
       )}
 
       {/* Action */}
-      <button
-        className={`w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-          provider.connected
-            ? "bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-            : `${colors.connectBtn} border border-transparent`
-        }`}
-      >
-        {provider.connected ? "Revoke Access" : `Connect ${provider.name}`}
-      </button>
+      {provider.connected ? (
+        <button
+          className="w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
+        >
+          Revoke Access
+        </button>
+      ) : (
+        <a
+          href={`/auth/login?connection=${provider.id === "google-calendar" ? "google-oauth2" : provider.id}&returnTo=/dashboard/permissions`}
+          className={`w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors text-center block ${colors.connectBtn} border border-transparent`}
+        >
+          Connect {provider.name}
+        </a>
+      )}
     </div>
   );
 }
