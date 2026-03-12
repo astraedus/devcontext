@@ -6,6 +6,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { withGoogleConnection } from "../auth0-ai";
+import { logAudit } from "../audit";
 
 const listEventsSchema = z.object({
   days: z.number().min(1).max(14).describe("Number of days to look ahead (default 3)"),
@@ -50,8 +51,10 @@ export const calendarTools = {
             attendees: e.attendees?.length || 0,
           }));
 
+          logAudit("google-calendar", "List Upcoming Events", `GET /calendar/v3/calendars/primary/events`, "success");
           return { status: "ok", days, count: events.length, events };
         } catch (err) {
+          logAudit("google-calendar", "List Upcoming Events", "GET /calendar/v3/calendars/primary/events", "error");
           return { status: "error", message: String(err) };
         }
       },
@@ -100,8 +103,10 @@ export const calendarTools = {
             attendeeCount: e.attendees?.length || 0,
           }));
 
+          logAudit("google-calendar", "Get Today's Schedule", "GET /calendar/v3/calendars/primary/events", "success");
           return { status: "ok", date: now.toISOString().split("T")[0], count: events.length, events };
         } catch (err) {
+          logAudit("google-calendar", "Get Today's Schedule", "GET /calendar/v3/calendars/primary/events", "error");
           return { status: "error", message: String(err) };
         }
       },

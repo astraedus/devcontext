@@ -1,34 +1,49 @@
 import { PermissionCard } from "@/components/PermissionCard";
+import { auth0 } from "@/lib/auth0";
 import type { Provider } from "@/lib/types";
 
-const providers: Provider[] = [
+const PROVIDERS_BASE: Omit<Provider, "connected" | "lastUsed">[] = [
   {
     id: "github",
     name: "GitHub",
-    connected: false,
     scopes: ["repo", "read:user", "notifications"],
     description: "Access pull requests, commits, and repository notifications.",
-    lastUsed: null,
   },
   {
     id: "google-calendar",
     name: "Google Calendar",
-    connected: false,
     scopes: ["calendar.readonly", "calendar.events.readonly"],
     description: "Read upcoming meetings and scheduling context.",
-    lastUsed: null,
   },
   {
     id: "slack",
     name: "Slack",
-    connected: false,
     scopes: ["channels:history", "users:read", "im:history"],
     description: "Read unread messages, channel activity, and mentions.",
-    lastUsed: null,
   },
 ];
 
-export default function PermissionsPage() {
+const CONNECTION_MAP: Record<string, string> = {
+  github: "github",
+  "google-calendar": "google-oauth2",
+  slack: "slack",
+};
+
+export default async function PermissionsPage() {
+  const session = await auth0.getSession();
+  const identities: Array<{ connection?: string; provider?: string }> =
+    ((session?.user as Record<string, unknown> | undefined)?.identities as Array<{
+      connection?: string;
+      provider?: string;
+    }>) ?? [];
+
+  const providers: Provider[] = PROVIDERS_BASE.map((p) => {
+    const connectionName = CONNECTION_MAP[p.id];
+    const isConnected = identities.some(
+      (id) => id.connection === connectionName || id.provider === connectionName
+    );
+    return { ...p, connected: isConnected, lastUsed: null };
+  });
   return (
     <>
       <header className="flex h-14 items-center border-b border-white/10 px-6">

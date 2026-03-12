@@ -10,6 +10,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { withSlackConnection } from "../auth0-ai";
+import { logAudit } from "../audit";
 
 const unreadMessagesSchema = z.object({
   limit: z
@@ -72,8 +73,10 @@ export const slackTools = {
               unreadCount: c.unread_count,
             }));
 
+          logAudit("slack", "Get Unread Messages", "GET /conversations.list", "success");
           return { status: "ok", count: unread.length, conversations: unread };
         } catch (err) {
+          logAudit("slack", "Get Unread Messages", "GET /conversations.list", "error");
           return { status: "error", message: String(err) };
         }
       },
@@ -141,6 +144,7 @@ export const slackTools = {
             })
           );
 
+          logAudit("slack", "Get Channel Summary", `GET /conversations.history?channel=${channelName}`, "success");
           return {
             status: "ok",
             channel: channelName,
@@ -148,6 +152,7 @@ export const slackTools = {
             messages,
           };
         } catch (err) {
+          logAudit("slack", "Get Channel Summary", "GET /conversations.history", "error");
           return { status: "error", message: String(err) };
         }
       },

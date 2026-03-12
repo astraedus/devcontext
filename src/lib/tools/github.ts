@@ -10,6 +10,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { withGitHubConnection } from "../auth0-ai";
+import { logAudit } from "../audit";
 
 const listPRsSchema = z.object({
   filter: z
@@ -65,8 +66,10 @@ export const githubTools = {
               author: pr.user.login,
             }));
 
+          logAudit("github", "List Pull Requests", `GET /issues?filter=${filter}`, "success");
           return { status: "ok", count: prs.length, pullRequests: prs };
         } catch (err) {
+          logAudit("github", "List Pull Requests", "GET /issues", "error");
           return { status: "error", message: String(err) };
         }
       },
@@ -107,6 +110,7 @@ export const githubTools = {
             }
 
             const commits = await res.json();
+            logAudit("github", "Get Recent Commits", `GET /repos/${repo}/commits`, "success");
             return {
               status: "ok",
               repo,
@@ -140,6 +144,7 @@ export const githubTools = {
             .filter((e: { type: string }) => e.type === "PushEvent")
             .slice(0, 5);
 
+          logAudit("github", "Get Recent Activity", "GET /events", "success");
           return {
             status: "ok",
             count: pushEvents.length,
@@ -187,6 +192,7 @@ export const githubTools = {
           }
 
           const notifications = await res.json();
+          logAudit("github", "Get Notifications", "GET /notifications", "success");
           return {
             status: "ok",
             count: notifications.length,
