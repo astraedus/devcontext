@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar } from "@/components/Sidebar";
 import { AuditLog } from "@/components/audit-log";
 
 export default function AuditPage() {
