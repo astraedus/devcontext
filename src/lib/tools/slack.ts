@@ -10,6 +10,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { logAudit } from "../audit";
+import { checkProviderAccess } from "../permissions";
 
 const unreadMessagesSchema = z.object({
   limit: z
@@ -37,6 +38,9 @@ export const slackTools = {
     parameters: zodSchema(unreadMessagesSchema),
     execute: async ({ limit }) => {
       try {
+        const access = await checkProviderAccess("slack");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
@@ -88,6 +92,9 @@ export const slackTools = {
     parameters: zodSchema(channelSummarySchema),
     execute: async ({ channelName, messageCount }) => {
       try {
+        const access = await checkProviderAccess("slack");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();

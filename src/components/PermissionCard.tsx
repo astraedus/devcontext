@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { Provider } from "@/lib/types";
+import { Loader2 } from "lucide-react";
 
 interface PermissionCardProps {
   provider: Provider;
@@ -36,23 +38,20 @@ function ProviderIcon({ id }: { id: Provider["id"] }) {
 
 const providerColors: Record<
   Provider["id"],
-  { icon: string; badge: string; border: string; connectBtn: string }
+  { icon: string; border: string; connectBtn: string }
 > = {
   github: {
     icon: "text-white",
-    badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
     border: "border-white/10",
     connectBtn: "bg-white text-black hover:bg-white/90",
   },
   "google-calendar": {
     icon: "text-blue-400",
-    badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
     border: "border-blue-500/20",
     connectBtn: "bg-blue-600 text-white hover:bg-blue-700",
   },
   slack: {
     icon: "text-purple-400",
-    badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
     border: "border-purple-500/20",
     connectBtn: "bg-purple-600 text-white hover:bg-purple-700",
   },
@@ -60,6 +59,32 @@ const providerColors: Record<
 
 export function PermissionCard({ provider }: PermissionCardProps) {
   const colors = providerColors[provider.id];
+  const [isRevoked, setIsRevoked] = useState(provider.revoked);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleToggle = async () => {
+    setIsUpdating(true);
+    try {
+      const res = await fetch("/api/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerId: provider.id,
+          action: isRevoked ? "grant" : "revoke",
+        }),
+      });
+
+      if (res.ok) {
+        setIsRevoked(!isRevoked);
+      }
+    } catch {
+      // Ignore errors silently for demo
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const effectivelyActive = provider.connected && !isRevoked;
 
   return (
     <div
@@ -83,17 +108,27 @@ export function PermissionCard({ provider }: PermissionCardProps) {
 
         <span
           className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-            provider.connected
-              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-              : "bg-white/5 text-white/40 border-white/10"
+            !provider.connected
+              ? "bg-white/5 text-white/40 border-white/10"
+              : isRevoked
+              ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
           }`}
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              provider.connected ? "bg-emerald-400" : "bg-white/30"
+              !provider.connected
+                ? "bg-white/30"
+                : isRevoked
+                ? "bg-amber-400"
+                : "bg-emerald-400"
             }`}
           />
-          {provider.connected ? "Connected" : "Not connected"}
+          {!provider.connected
+            ? "Not connected"
+            : isRevoked
+            ? "Revoked"
+            : "Connected"}
         </span>
       </div>
 
@@ -108,7 +143,11 @@ export function PermissionCard({ provider }: PermissionCardProps) {
           {provider.scopes.map((scope) => (
             <span
               key={scope}
-              className="rounded-md border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[10px] text-white/50"
+              className={`rounded-md border px-2 py-0.5 font-mono text-[10px] ${
+                effectivelyActive
+                  ? "border-white/10 bg-white/5 text-white/50"
+                  : "border-white/5 bg-white/[0.02] text-white/25 line-through"
+              }`}
             >
               {scope}
             </span>
@@ -117,19 +156,43 @@ export function PermissionCard({ provider }: PermissionCardProps) {
       )}
 
       {/* Action */}
-      {provider.connected ? (
-        <button
-          className="w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-        >
-          Revoke Access
-        </button>
-      ) : (
+      {!provider.connected ? (
         <a
           href={`/auth/login?connection=${provider.id === "google-calendar" ? "google-oauth2" : provider.id}&returnTo=/dashboard/permissions`}
           className={`w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors text-center block ${colors.connectBtn} border border-transparent`}
         >
           Connect {provider.name}
         </a>
+      ) : isRevoked ? (
+        <button
+          onClick={handleToggle}
+          disabled={isUpdating}
+          className="w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 disabled:opacity-50"
+        >
+          {isUpdating ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating...
+            </span>
+          ) : (
+            "Re-enable Access"
+          )}
+        </button>
+      ) : (
+        <button
+          onClick={handleToggle}
+          disabled={isUpdating}
+          className="w-full rounded-xl px-4 py-2 text-sm font-medium transition-colors bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-50"
+        >
+          {isUpdating ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating...
+            </span>
+          ) : (
+            "Revoke Access"
+          )}
+        </button>
       )}
     </div>
   );

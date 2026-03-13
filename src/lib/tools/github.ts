@@ -10,6 +10,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { logAudit } from "../audit";
+import { checkProviderAccess } from "../permissions";
 
 const listPRsSchema = z.object({
   filter: z
@@ -28,6 +29,9 @@ export const githubTools = {
     parameters: zodSchema(listPRsSchema),
     execute: async ({ filter }) => {
       try {
+        const access = await checkProviderAccess("github");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
@@ -81,6 +85,9 @@ export const githubTools = {
     parameters: zodSchema(getCommitsSchema),
     execute: async ({ repo }) => {
       try {
+        const access = await checkProviderAccess("github");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
@@ -166,6 +173,9 @@ export const githubTools = {
     parameters: zodSchema(z.object({})),
     execute: async () => {
       try {
+        const access = await checkProviderAccess("github");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();

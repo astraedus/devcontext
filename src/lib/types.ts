@@ -2,6 +2,7 @@ export interface Provider {
   id: "github" | "google-calendar" | "slack";
   name: string;
   connected: boolean;
+  revoked: boolean;
   scopes: string[];
   description: string;
   lastUsed: string | null;

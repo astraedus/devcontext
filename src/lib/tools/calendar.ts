@@ -10,6 +10,7 @@ import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
 import { logAudit } from "../audit";
+import { checkProviderAccess } from "../permissions";
 
 const listEventsSchema = z.object({
   days: z.number().min(1).max(14).describe("Number of days to look ahead (default 3)"),
@@ -21,6 +22,9 @@ export const calendarTools = {
     parameters: zodSchema(listEventsSchema),
     execute: async ({ days }) => {
       try {
+        const access = await checkProviderAccess("google-calendar");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
@@ -69,6 +73,9 @@ export const calendarTools = {
     parameters: zodSchema(z.object({})),
     execute: async () => {
       try {
+        const access = await checkProviderAccess("google-calendar");
+        if (!access.allowed) return access.result;
+
         let token: string;
         try {
           token = getAccessTokenFromTokenVault();
