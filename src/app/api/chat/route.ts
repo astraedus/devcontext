@@ -70,5 +70,5 @@ export async function POST(req: NextRequest) {
     stopWhen: stepCountIs(5),
   });
 
-  return result.toTextStreamResponse();
+  return result.toDataStreamResponse();
 }

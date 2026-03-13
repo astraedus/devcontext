@@ -1,109 +1,69 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { SendHorizonal, Loader2 } from "lucide-react";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-}
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: "welcome",
-    role: "assistant",
-    content:
-      "Hi! I'm DevContext. Ask me anything about your work — open PRs, today's meetings, unread Slack messages. Connect your services in Permissions to get started.",
-  },
-];
+import { useChat } from "@ai-sdk/react";
+import { SendHorizonal, Loader2, Check, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function cn(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
 
+const TOOL_LABELS: Record<string, { label: string; provider: string }> = {
+  listPullRequests: { label: "Fetching Pull Requests", provider: "github" },
+  getRecentCommits: { label: "Fetching Recent Commits", provider: "github" },
+  getNotifications: { label: "Checking Notifications", provider: "github" },
+  listUpcomingEvents: { label: "Checking Calendar", provider: "google-calendar" },
+  getTodaySchedule: { label: "Loading Today's Schedule", provider: "google-calendar" },
+  getUnreadMessages: { label: "Checking Slack Messages", provider: "slack" },
+  getChannelSummary: { label: "Summarizing Channel", provider: "slack" },
+  getServerTime: { label: "Checking Server", provider: "system" },
+};
+
+const PROVIDER_COLORS: Record<string, string> = {
+  github: "border-white/20 bg-white/5 text-white/70",
+  "google-calendar": "border-blue-500/20 bg-blue-500/5 text-blue-400",
+  slack: "border-purple-500/20 bg-purple-500/5 text-purple-400",
+  system: "border-white/10 bg-white/5 text-white/40",
+};
+
+const SUGGESTIONS = [
+  "Brief me for standup",
+  "What PRs need my review?",
+  "What's on my calendar today?",
+  "Summarize my unread messages",
+];
+
+function ToolCallIndicator({ toolName, state }: { toolName: string; state: string }) {
+  const info = TOOL_LABELS[toolName] || { label: toolName, provider: "system" };
+  const colors = PROVIDER_COLORS[info.provider] || PROVIDER_COLORS.system;
+  const isDone = state === "result";
+
+  return (
+    <div className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${colors}`}>
+      {isDone ? (
+        <Check className="h-3 w-3" />
+      ) : (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      )}
+      {info.label}
+    </div>
+  );
+}
+
 export function ChatPanel() {
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const { messages, input, handleInputChange, handleSubmit, isLoading, append } = useChat({
+    initialMessages: [
+      {
+        id: "welcome",
+        role: "assistant",
+        content:
+          "Hi! I'm DevContext. Ask me anything about your work -- open PRs, today's meetings, unread Slack messages. Connect your services in **Permissions** to get started.",
+      },
+    ],
+  });
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input.trim(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map(({ role, content }) => ({
-            role,
-            content,
-          })),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      // Stream the response
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantContent = "";
-
-      const assistantId = (Date.now() + 1).toString();
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: "assistant", content: "" },
-      ]);
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          assistantContent += chunk;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: assistantContent }
-                : m
-            )
-          );
-        }
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Unknown error";
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: `Sorry, something went wrong: ${errorMessage}. Make sure your .env.local is configured.`,
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const hasUserMessages = messages.some((m) => m.role === "user");
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -111,33 +71,91 @@ export function ChatPanel() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="flex flex-col gap-4 max-w-2xl mx-auto">
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                "flex",
-                message.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
+            <div key={message.id}>
               <div
                 className={cn(
-                  "max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed",
-                  message.role === "user"
-                    ? "bg-white text-black font-medium"
-                    : "bg-white/5 border border-white/10 text-white/90"
+                  "flex",
+                  message.role === "user" ? "justify-end" : "justify-start"
                 )}
               >
-                {message.content || (
-                  <span className="flex items-center gap-2 text-white/40">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Thinking...
-                  </span>
-                )}
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed",
+                    message.role === "user"
+                      ? "bg-white text-black font-medium"
+                      : "bg-white/5 border border-white/10 text-white/90"
+                  )}
+                >
+                  {message.role === "assistant" ? (
+                    message.content ? (
+                      <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-headings:my-2 prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10 prose-code:text-emerald-400 prose-a:text-blue-400">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-2 text-white/40">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Thinking...
+                      </span>
+                    )
+                  ) : (
+                    message.content
+                  )}
+                </div>
               </div>
+
+              {/* Tool call indicators */}
+              {message.toolInvocations && message.toolInvocations.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {message.toolInvocations.map((tool: { toolName: string; state: string }, i: number) => (
+                    <ToolCallIndicator
+                      key={`${message.id}-tool-${i}`}
+                      toolName={tool.toolName}
+                      state={tool.state}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
-          <div ref={bottomRef} />
+
+          {/* Loading indicator when AI is generating */}
+          {isLoading && messages[messages.length - 1]?.role === "user" && (
+            <div className="flex justify-start">
+              <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+                <span className="flex items-center gap-2 text-white/40 text-sm">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Thinking...
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Suggestion chips */}
+      {!hasUserMessages && (
+        <div className="px-6 pb-2">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center gap-2 mb-3 text-xs text-white/30">
+              <Sparkles className="h-3 w-3" />
+              Try asking
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => append({ role: "user", content: s })}
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60 hover:bg-white/10 hover:text-white/80 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Input */}
       <div className="border-t border-white/10 p-4">
@@ -147,10 +165,10 @@ export function ChatPanel() {
         >
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Ask about your PRs, meetings, or Slack messages..."
             disabled={isLoading}
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/20 focus:bg-white/8 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/20 focus:bg-white/[0.08] transition-colors disabled:opacity-50"
           />
           <button
             type="submit"
