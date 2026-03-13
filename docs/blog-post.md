@@ -19,71 +19,141 @@ For a toy demo, this doesn't matter. For anything you'd actually use in producti
 
 ## Enter Token Vault
 
-Auth0 Token Vault takes a fundamentally different approach. Instead of giving the AI a static token, it gives the AI a **mechanism to request tokens on demand**.
+Auth0 Token Vault takes a fundamentally different approach. Instead of giving the AI a static token, it gives the AI a **mechanism to request tokens on demand** via RFC 8693 token exchange.
 
 Here's how it works in DevContext:
 
 ```typescript
 import { getAccessTokenFromTokenVault } from "@auth0/ai-vercel";
-import { withGitHubConnection } from "../auth0-ai";
 
 export const githubTools = {
-  listPullRequests: withGitHubConnection(
-    tool({
-      description: "List open pull requests",
-      execute: async ({ filter }) => {
-        const credentials = getAccessTokenFromTokenVault();
-        const token = credentials?.accessToken;
-        if (!token) {
-          return { status: "not_connected" };
-        }
-        // Use the scoped, time-limited token
-        const res = await fetch("https://api.github.com/issues", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        // ...
-      },
-    })
-  ),
+  listPullRequests: tool({
+    description: "List open pull requests",
+    execute: async ({ filter }) => {
+      // Check user's permission override first
+      const access = await checkProviderAccess("github");
+      if (!access.allowed) return access.result;
+
+      // Request a scoped, time-limited token from Token Vault
+      let token: string;
+      try {
+        token = getAccessTokenFromTokenVault();
+      } catch {
+        return { status: "not_connected", message: "GitHub is not connected." };
+      }
+
+      // Use the token for exactly this API call
+      const res = await fetch("https://api.github.com/issues", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // ...
+    },
+  }),
 };
 ```
 
-The `withGitHubConnection` wrapper handles the Token Vault exchange automatically. The AI tool never stores a token. It requests one, uses it for that specific API call, and the token is scoped to exactly the permissions the user granted.
+The AI tool never stores a token. It requests one from Token Vault, uses it for that specific API call, and the token is scoped to exactly the permissions the user granted.
 
-## What This Enables
+## The Permission Layer Most Apps Skip
 
-With Token Vault as the authorization layer, DevContext can offer something most AI assistants cannot: **verifiable trust**.
+Token Vault handles secure token storage and exchange. But we asked: **what if the user wants to block the AI from using a connected service, without disconnecting entirely?**
 
-**Permission Control Center**: Users see exactly which services the AI can access, with what scopes. They can connect Google Calendar for read-only access without worrying about the AI creating or deleting events.
+This is the difference between "I want to unlink my GitHub" and "I want the AI to stop reading my repos for now." The first is destructive. The second is a permission toggle.
 
-**Audit Trail**: Every Token Vault exchange and API call is logged. Users can see that at 9:47 AM, the AI requested a GitHub token, called `GET /issues?filter=review-requested`, and got 3 results. Full transparency.
+DevContext implements this with a Permission Control Center:
 
-**Instant Revocation**: Disconnect a service and the next Token Vault exchange returns null. The AI gracefully tells the user to reconnect. No dangling tokens, no cleanup.
+```typescript
+export async function checkProviderAccess(providerId: string) {
+  const session = await auth0.getSession();
+  if (session?.user) {
+    const sub = session.user.sub;
+    if (isProviderRevoked(sub, providerId)) {
+      logAudit(providerId, "Permission Check", "Access revoked by user", "denied");
+      return {
+        allowed: false,
+        result: {
+          status: "access_revoked",
+          message: `${providerId} access has been revoked. Visit Permissions to re-enable.`,
+        },
+      };
+    }
+  }
+  return { allowed: true };
+}
+```
 
-**Graceful Degradation**: When a service isn't connected, the tool returns `not_connected` instead of crashing. The AI can still help with the services that ARE connected.
+Every tool calls `checkProviderAccess()` before attempting a Token Vault exchange. If the user revoked access, the tool returns immediately with a clear message, and the AI gracefully adapts.
+
+The UI shows three states per service:
+- **Connected** (green) -- tokens available, AI can access
+- **Revoked** (amber) -- tokens exist but AI is blocked
+- **Not connected** (gray) -- no Auth0 identity linked
+
+Revoking is instant. Re-enabling is instant. The underlying OAuth connection stays intact.
+
+## Tool Call Transparency
+
+When the AI processes a request like "Brief me for standup," it calls multiple tools across services. DevContext makes this visible in real-time:
+
+Each tool call appears as a status indicator in the chat, color-coded by provider -- white for GitHub, blue for Calendar, purple for Slack. Users see "Fetching Pull Requests..." with a spinner, then a checkmark when complete.
+
+This isn't just aesthetic polish. It directly answers the question every user should be asking: **"What is the AI doing with my data right now?"**
+
+## The Audit Trail
+
+Every token exchange and permission check is logged:
+
+```typescript
+export function logAudit(
+  provider: string,
+  action: string,
+  endpoint: string,
+  status: "success" | "denied" | "error"
+) {
+  auditLog.unshift({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date().toISOString(),
+    provider,
+    action,
+    endpoint,
+    status,
+  });
+}
+```
+
+The audit page shows a timeline: which services were accessed, what API endpoints were called, whether access was granted or denied, and when. If a user revokes Slack access, they can see the "denied" entries proving the AI respected the revocation.
 
 ## The Architecture
 
-DevContext uses the Vercel AI SDK with multi-step tool calling. The AI has access to 8 tools across three services:
+DevContext uses the Vercel AI SDK with multi-step tool calling:
 
-- **GitHub**: `listPullRequests`, `getRecentCommits`, `getNotifications`
-- **Google Calendar**: `listUpcomingEvents`, `getTodaySchedule`
-- **Slack**: `getUnreadMessages`, `getChannelSummary`
+```
+User --> Auth0 Login --> Token Vault stores OAuth tokens
+                              |
+Next.js App --> AI SDK --> Claude / Gemini (tool calls)
+                              |
+checkProviderAccess() --> Permission check (pass/deny)
+                              |
+getAccessTokenFromTokenVault() --> Token Vault exchange --> Provider API
+                              |
+Streaming response --> Chat UI + Tool Indicators + Audit Log
+```
 
-Each tool is wrapped with its corresponding Token Vault connection (`withGitHubConnection`, `withGoogleConnection`, `withSlackConnection`). The wrapping is declarative and composable. Adding a new service means creating a new tool file and a new Token Vault connection in Auth0.
-
-The key insight: **the authorization layer is not bolted on after the fact. It's the foundation the entire tool system is built on.** Every tool call goes through Token Vault. There's no backdoor, no shortcut, no "just use the env var for now."
+8 tools across three services, each going through the same permission check + Token Vault pipeline. Adding a new service means creating a new tool file and a new Auth0 social connection.
 
 ## Why This Matters
 
 The AI agent ecosystem is about to explode. Every SaaS product will have AI integrations. Every developer will have AI assistants accessing their tools.
 
-The question isn't whether AI agents will access our APIs. It's whether that access will be secure, auditable, and revocable by default.
+The question isn't whether AI agents will access our APIs. It's whether that access will be:
 
-Auth0 Token Vault makes the secure path the easy path. That's what good security infrastructure does. It doesn't make developers work harder. It makes the right thing the default thing.
+1. **Scoped** -- only the permissions the user granted
+2. **Auditable** -- every access logged and visible
+3. **Revocable** -- instantly, without breaking anything
+4. **Transparent** -- users can see what the AI is doing in real-time
 
-DevContext is our proof that you can build a genuinely useful AI agent where authorization isn't a checkbox. It's the product.
+Auth0 Token Vault makes the secure path the easy path. DevContext proves you can build a genuinely useful AI agent where authorization is the foundation, not a checkbox.
 
 ---
 
-*DevContext is open source at [github.com/astraedus/devcontext](https://github.com/astraedus/devcontext). Try it at [devcontext-two.vercel.app](https://devcontext-two.vercel.app).*
+*DevContext is open source at [github.com/astraedus/devcontext](https://github.com/astraedus/devcontext). Try it at [devcontext-two.vercel.app](https://devcontext-two.vercel.app). Built for the [Auth0 "Authorized to Act" Hackathon](https://authorizedtoact.devpost.com/).*
