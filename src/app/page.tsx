@@ -121,6 +121,7 @@ export default function LandingPage() {
           </Link>
           <Link
             href="/auth/login?returnTo=/dashboard"
+            prefetch={false}
             className="text-xs bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-lg transition-colors"
           >
             Sign in
@@ -151,6 +152,7 @@ export default function LandingPage() {
         <div className="mt-10 flex flex-col sm:flex-row gap-3">
           <Link
             href="/auth/login?returnTo=/dashboard"
+            prefetch={false}
             className="inline-flex items-center justify-center rounded-xl bg-white text-black font-medium px-6 py-3 text-sm hover:bg-white/90 transition-colors"
           >
             Get Started Free
