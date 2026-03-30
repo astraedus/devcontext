@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# === Astraedus internal files ===
+CLAUDE.md
+tasks/
+docs/exec-plans/
+docs/devpost-submission.md
+docs/blog-post.md
+docs/demo-script.md
+demo/narration.*
+demo/*-script.*
+demo/record*.py
+demo/build-video.*
+marketing/
+scripts/*patients*.json
+scripts/demo-*.json
+blog-article.md
+blog-post.md
